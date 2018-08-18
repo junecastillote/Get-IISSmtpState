@@ -3,12 +3,12 @@ Write-Host "=================================================" -ForegroundColor 
 Write-Host "           Get-IISSmtpState v$scriptVersion  " -ForegroundColor Yellow
 Write-Host "         june.castillote@gmail.com           " -ForegroundColor Yellow
 Write-Host "=================================================" -ForegroundColor Yellow
-#http://shaking-off-the-cobwebs.blogspot.com/
+#https://www.lazyexchangeadmin.com/2016/03/iis-smtp-server-status-check-powershell.html
 Write-Host ''
 Write-Host (Get-Date) ': Begin' -ForegroundColor Green
 Write-Host (Get-Date) ': Setting Paths and Variables' -ForegroundColor Yellow
 $ErrorActionPreference="SilentlyContinue"
-$WarningPreference="SilentlyContinue";
+$WarningPreference="SilentlyContinue"
 
 #Server names to be checked, seperate with comma ","
 $SmtpServers = "smtp1,smtp2"
@@ -34,11 +34,11 @@ $pickup_count = 1
 $SendReportViaEmail = $true
 #>>------------------------------------------------------------------------------
 #>>Mail
-$CompanyName = 'ABC'
+$CompanyName = 'LazyExchangeAdmin.com'
 $MailSubject = 'IIS Smtp Server Report '
 $MailServer = 'smtp1'
-$MailSender = 'ABC postmaster <postmaster@abc.com>'
-$MailTo = 'administrator@abc.com'
+$MailSender = 'mailer <mailer@LazyExchangeAdmin.com>'
+$MailTo = 'administrator@LazyExchangeAdmin.com'
 $MailCC = '' #if you specify a CC address, make sure to uncomment the CC line in the $params variable block
 $MailBCC = '' #if you specify a BCC address, make sure to uncomment the BCC line in the $params variable block
 #>>------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ $mail_body += '<b>[REPORT]</b><br />'
 $mail_body += 'Generated from Server: ' + (gc env:computername) + '<br />'
 $mail_body += 'Script Path: ' + $script_root
 $mail_body += '<p>'
-$mail_body += "<a href='http://shaking-off-the-cobwebs.blogspot.com/2016/03/iis-smtp-server-status-check-powershell.html'>IIS Smtp State v$scriptVersion</a>"
+$mail_body += "<a href='https://www.lazyexchangeadmin.com/2016/03/iis-smtp-server-status-check-powershell.html'>IIS Smtp State v$scriptVersion</a>"
 $mbody = $mbox -replace "&lt;","<"
 $mbody = $mbox -replace "&gt;",">"
 $mail_body | Out-File $reportfile
