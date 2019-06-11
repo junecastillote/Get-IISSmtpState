@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 2.2
+.VERSION 2.2.1
 
 .GUID 35b14c0b-4e9a-4111-9d9a-cfe6cf038219
 
@@ -302,7 +302,7 @@ Function Get-ScriptInfo
 
 
 Stop-TxnLogging
-Clear-Host
+#Clear-Host
 
 #Get Script Information
 [double]$myPsVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
