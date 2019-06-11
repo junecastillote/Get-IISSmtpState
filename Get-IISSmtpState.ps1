@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 2.1
+.VERSION 2.2
 
 .GUID 35b14c0b-4e9a-4111-9d9a-cfe6cf038219
 
@@ -30,6 +30,8 @@
 	- Fixed bugs
 	- Code cleanup
 	- Added error handling logic
+2.2 (June 12, 2019)
+	- More code cleanup
 
 
 .PRIVATEDATA
@@ -244,12 +246,15 @@ $css_string = @'
 #...................................
 #Region FUNCTIONS
 #...................................
+
+#Function to get current system timezone (for PS versions below 5)
 Function Get-TimeZoneInfo
 {  
 	$tzName = ([System.TimeZone]::CurrentTimeZone).StandardName
 	$tzInfo = [System.TimeZoneInfo]::FindSystemTimeZoneById($tzName)
 	Return $tzInfo	
 }
+#Function to stop transcribing
 Function Stop-TxnLogging
 {
 	$txnLog=""
@@ -263,7 +268,7 @@ Function Stop-TxnLogging
     } While ($txnLog -ne "stopped")
 }
 
-#Function to Start Transaction Logging
+#Function to Start transcribing
 Function Start-TxnLogging 
 {
     param 
@@ -275,7 +280,7 @@ Function Start-TxnLogging
     Start-Transcript $logDirectory -Append
 }
 
-#Function to get Script Version and ProjectURI for PSv4
+#Function to get Script Version and ProjectURI for PS vesions below 5.1
 Function Get-ScriptInfo
 {
     param 
@@ -300,7 +305,8 @@ Stop-TxnLogging
 Clear-Host
 
 #Get Script Information
-if ($PSVersionTable.PSVersion.Major -lt 5)
+[double]$myPsVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+if ($myPsVersion -lt 5.1)
 {
 	$scriptInfo = Get-ScriptInfo -Path $MyInvocation.MyCommand.Definition
 }
@@ -419,18 +425,19 @@ foreach ($computer in $computerName)
 		PickupSize=0
 		BadMailSize=0
 		DropSize=0
-		QueueStatus=""
-		PickupStatus=""
-		BadMailStatus=""
-		DropStatus=""
-		ServiceStatus=""
-		ServerStatus=""
+		QueueStatus="Passed"
+		PickupStatus="Passed"
+		BadMailStatus="Passed"
+		DropStatus="Passed"
+		ServiceStatus="Passed"
+		ServerStatus="Passed"
 		CheckItems=@()
 	}
 	#NOTE: This script will only check the default folders
 	$svcStatus = Get-Service -ComputerName $computer -Name SMTPSVC -ErrorAction SilentlyContinue -ErrorVariable svcErr
 	$prop.Computer = $computer
 
+<#
 	#all status start off as PASSED
 	$prop.ServerStatus = "Passed"
 	$prop.QueueStatus = "Passed"
@@ -439,140 +446,114 @@ foreach ($computer in $computerName)
 	$prop.DropStatus = "Passed"
 	$prop.ServiceStatus = "Passed"
 	$prop.CheckItems = @()
+#>	
 
 	#computer Status
-	if (!$wmiErr)
+	$prop.QueueDirectory = "\\$($computer)\c$\inetpub\mailroot\queue"
+	$prop.PickupDirectory = "\\$($computer)\c$\inetpub\mailroot\pickup"
+	$prop.BadMailDirectory = "\\$($computer)\c$\inetpub\mailroot\badmail"
+	$prop.DropDirectory = "\\$($computer)\c$\inetpub\mailroot\drop"
+
+	$queue = Get-ChildItem $prop.QueueDirectory -ErrorAction SilentlyContinue -ErrorVariable queueVar | Measure-Object -property length -sum
+	$pickup = Get-ChildItem $prop.PickupDirectory -ErrorAction SilentlyContinue -ErrorVariable pickupVar | Measure-Object -property length -sum
+	$badmail = Get-ChildItem $prop.BadMailDirectory -ErrorAction SilentlyContinue -ErrorVariable badmailVar | Measure-Object -property length -sum
+	$drop = Get-ChildItem $prop.DropDirectory -ErrorAction SilentlyContinue -ErrorVariable dropVar | Measure-Object -property length -sum
+
+
+	#error checks
+	if ($queueVar)
 	{
-		$prop.QueueDirectory = "\\$($computer)\c$\inetpub\mailroot\queue"
-		$prop.PickupDirectory = "\\$($computer)\c$\inetpub\mailroot\pickup"
-		$prop.BadMailDirectory = "\\$($computer)\c$\inetpub\mailroot\badmail"
-		$prop.DropDirectory = "\\$($computer)\c$\inetpub\mailroot\drop"
-
-		$queue = Get-ChildItem $prop.QueueDirectory -ErrorAction SilentlyContinue -ErrorVariable queueVar | Measure-Object -property length -sum
-		$pickup = Get-ChildItem $prop.PickupDirectory -ErrorAction SilentlyContinue -ErrorVariable pickupVar | Measure-Object -property length -sum
-		$badmail = Get-ChildItem $prop.BadMailDirectory -ErrorAction SilentlyContinue -ErrorVariable badmailVar | Measure-Object -property length -sum
-		$drop = Get-ChildItem $prop.DropDirectory -ErrorAction SilentlyContinue -ErrorVariable dropVar | Measure-Object -property length -sum
-
-
-		#error checks
-		if ($queueVar)
-		{
-			$prop.CheckItems += $queueVar.Exception.Message
-			$prop.CheckItems += "Error retrieving queue"
-			$prop.QueueDirectory = $queueVar.Exception.Message
-			$prop.QueueCount = 0
-			$prop.QueueSize = 0
-			$prop.QueueStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-		}
-		else {
-			$prop.QueueCount = [math]::Round($queue.count)
-			$prop.QueueSize = [math]::Round(($queue.sum) / 1KB)
-		}
-
-		if ($pickupVar)
-		{
-			$prop.CheckItems += $pickupVar.Exception.Message
-			$prop.CheckItems += "Error retrieving pickup"
-			$prop.PickupDirectory = $pickupVar.Exception.Message
-			$prop.pickupCount = 0
-			$prop.pickupSize = 0
-			$prop.PickupStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-		}
-		else {
-			$prop.pickupCount = [math]::Round($pickup.count)
-			$prop.pickupSize = [math]::Round(($pickup.sum) / 1KB)
-		}
-
-		if ($badmailVar)
-		{
-			$prop.CheckItems += $badmailVar.Exception.Message
-			$prop.CheckItems += "Error retrieving badmail"
-			$prop.BadMailDirectory = $badmailVar.Exception.Message
-			$prop.badmailCount = 0
-			$prop.badmailSize = 0
-			$prop.BadMailStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-		}
-		else {
-			$prop.badmailCount = [math]::Round($badMail.count)
-			$prop.badmailSize = [math]::Round(($badMail.sum) / 1KB)
-		}
-
-		if ($dropVar)
-		{
-			$prop.CheckItems += $dropVar.Exception.Message
-			$prop.CheckItems += "Error retrieving drop"
-			$prop.DropDirectory = $dropVar.Exception.Message
-			$prop.DropCount = 0
-			$prop.dropSize = 0
-			$prop.DropStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-		}
-		else {
-			$prop.DropCount = [math]::Round($drop.count)
-			$prop.dropSize = [math]::Round(($drop.sum) / 1KB)
-		}
-		
-		#queue threshold tripped
-		if ($queueThreshold -and ($queue.Count) -gt $queueThreshold)
-		{
-			$prop.QueueStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-			$prop.CheckItems += "Queue Count is $($queue.Count) which is over the theshold of $($queueThreshold)"
-		}
-
-		#pickup threshold tripped
-		if ($pickupThreshold -and ($pickup.count) -gt $pickupThreshold)
-		{
-			$prop.PickupStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-			$prop.CheckItems += "Pickup Count is $($pickup.Count) which is over the theshold of $($pickupThreshold)"
-		}
-
-		#badmail threshold tripped
-		if ($badMailThreshold -and ($badmail.count) -gt $badMailThreshold)
-		{
-			$prop.BadMailStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-			$prop.CheckItems += "BadMail Count is $($badmail.Count) which is over the theshold of $($badMailThreshold)"
-		}
-
-		#drop threshold tripped
-		if ($dropThreshold -and ($drop.Count) -gt $dropThreshold)
-		{
-			$prop.DropStatus = "Failed"
-			$prop.ServerStatus = "Failed"
-			$prop.CheckItems += "Drop Count is $($drop.Count) which is over the theshold of $($dropThreshold)"
-		}
-	}
-	else 
-	{
-		$prop.QueueDirectory = $wmiErr.Exception.Message
-		$prop.PickupDirectory = $wmiErr.Exception.Message
-		$prop.BadMailDirectory = $wmiErr.Exception.Message
-		$prop.DropDirectory = $wmiErr.Exception.Message
-		$prop.QueueStatus = "Failed"
-		$prop.PickupStatus = "Failed"
-		$prop.BadMailStatus = "Failed"
-		$prop.DropStatus = "Failed"
-		$prop.ServerStatus = "Failed"
+		$prop.CheckItems += $queueVar.Exception.Message
+		$prop.QueueDirectory = $queueVar.Exception.Message
 		$prop.QueueCount = 0
 		$prop.QueueSize = 0
-		$prop.PickupCount = 0
-		$prop.PickupSize = 0
-		$prop.BadMailCount = 0
-		$prop.BadMailSize = 0
-		$prop.DropCount = 0
-		$prop.DropSize = 0
-		$prop.CheckItems += ("WMI Error: " +$wmiErr.Exception.Message)
+		$prop.QueueStatus = "Failed"
+		$prop.ServerStatus = "Failed"
 	}
+	else {
+		$prop.QueueCount = [math]::Round($queue.count)
+		$prop.QueueSize = [math]::Round(($queue.sum) / 1KB)
+	}
+
+	if ($pickupVar)
+	{
+		$prop.CheckItems += $pickupVar.Exception.Message
+		$prop.PickupDirectory = $pickupVar.Exception.Message
+		$prop.pickupCount = 0
+		$prop.pickupSize = 0
+		$prop.PickupStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+	}
+	else {
+		$prop.pickupCount = [math]::Round($pickup.count)
+		$prop.pickupSize = [math]::Round(($pickup.sum) / 1KB)
+	}
+
+	if ($badmailVar)
+	{
+		$prop.CheckItems += $badmailVar.Exception.Message
+		$prop.BadMailDirectory = $badmailVar.Exception.Message
+		$prop.badmailCount = 0
+		$prop.badmailSize = 0
+		$prop.BadMailStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+	}
+	else {
+		$prop.badmailCount = [math]::Round($badMail.count)
+		$prop.badmailSize = [math]::Round(($badMail.sum) / 1KB)
+	}
+
+	if ($dropVar)
+	{
+		$prop.CheckItems += $dropVar.Exception.Message
+		$prop.DropDirectory = $dropVar.Exception.Message
+		$prop.DropCount = 0
+		$prop.dropSize = 0
+		$prop.DropStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+	}
+	else {
+		$prop.DropCount = [math]::Round($drop.count)
+		$prop.dropSize = [math]::Round(($drop.sum) / 1KB)
+	}
+	
+	#queue threshold tripped
+	if ($queueThreshold -and ($queue.Count) -gt $queueThreshold)
+	{
+		$prop.QueueStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+		$prop.CheckItems += "Queue Count is $($queue.Count) which is over the theshold of $($queueThreshold)"
+	}
+
+	#pickup threshold tripped
+	if ($pickupThreshold -and ($pickup.count) -gt $pickupThreshold)
+	{
+		$prop.PickupStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+		$prop.CheckItems += "Pickup Count is $($pickup.Count) which is over the theshold of $($pickupThreshold)"
+	}
+
+	#badmail threshold tripped
+	if ($badMailThreshold -and ($badmail.count) -gt $badMailThreshold)
+	{
+		$prop.BadMailStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+		$prop.CheckItems += "BadMail Count is $($badmail.Count) which is over the theshold of $($badMailThreshold)"
+	}
+
+	#drop threshold tripped
+	if ($dropThreshold -and ($drop.Count) -gt $dropThreshold)
+	{
+		$prop.DropStatus = "Failed"
+		$prop.ServerStatus = "Failed"
+		$prop.CheckItems += "Drop Count is $($drop.Count) which is over the theshold of $($dropThreshold)"
+	}
+	
 	
 	#Service Status
 	if (!$svcErr)
 	{
-		$prop.Service = $svcStatus.Status	
+		$prop.Service = $svcStatus.Status
 		if ($prop.Service -ne 'Running')
 		{
 			$prop.ServiceStatus = "Failed"
@@ -602,32 +583,20 @@ $serverCollection
 #...................................
 #Region WRITE REPORT
 #...................................
-
-
 $failedServers = $serverCollection | Where-Object {$_.ServerStatus -ne 'Passed'}
-#Write-Host ($failedServers | Measure-Object).Count
 $mailSubject = "IIS Virtual SMTP Service Report | $($today)"
 if ($orgName)
 {
-	if ($failedServers)
-	{
-		$mailSubject = "ALERT!!! - [$($orgName)] | IIS Virtual SMTP Service Report | $($today)"
-	}
-	else
-	{
-		$mailSubject = "[$($orgName)] | IIS Virtual SMTP Service Report | $($today)"	
-	}
+	$mailSubject = "[$($orgName)] | IIS Virtual SMTP Service Report | $($today)"	
 }
 else 
 {
-	if ($failedServers)
-	{
-		$mailSubject = "ALERT!!! - IIS Virtual SMTP Service Report | $($today)"
-	}
-	else
-	{
-		$mailSubject = "IIS Virtual SMTP Service Report | $($today)"	
-	}
+	$mailSubject = "IIS Virtual SMTP Service Report | $($today)"
+}
+
+if ($failedServers)
+{
+	$mailSubject = "ALERT!!! - $($mailSubject)"
 }
 
 
