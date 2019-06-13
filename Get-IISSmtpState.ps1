@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 2.2.1
+.VERSION 2.2.2
 
 .GUID 35b14c0b-4e9a-4111-9d9a-cfe6cf038219
 
@@ -32,6 +32,8 @@
 	- Added error handling logic
 2.2 (June 12, 2019)
 	- More code cleanup
+2.2.2 (June 13, 2019)
+	- fixed Get-ScriptInfo function
 
 
 .PRIVATEDATA
@@ -129,9 +131,6 @@ param (
 	[switch]
     $useSSL
 )
-
-
-
 
 #...................................
 #Region CSS
@@ -240,7 +239,7 @@ $css_string = @'
 </style>
 '@
 #...................................
-#Region CSS
+#EndRegion CSS
 #...................................
 
 #...................................
@@ -283,17 +282,41 @@ Function Start-TxnLogging
 #Function to get Script Version and ProjectURI for PS vesions below 5.1
 Function Get-ScriptInfo
 {
-    param 
+    param
     (
         [Parameter(Mandatory=$true,Position=0)]
         [string]$Path
 	)
 	
+	$scriptFile = Get-Content $Path
+
 	$props = @{
-		Version = (Select-String -Pattern ".VERSION" -Path $Path)[0].ToString().split(" ")[1]
-		ProjectURI = (Select-String -Pattern ".PROJECTURI" -Path $Path)[0].ToString().split(" ")[1]
+		Version = ""
+		ProjectURI = ""
 	}
+
 	$scriptInfo = New-Object PSObject -Property $props
+
+	# Get Version
+	foreach ($line in $scriptFile)
+	{	
+		if ($line -like ".VERSION*")
+		{
+			$scriptInfo.Version = $line.Split(" ")[1]
+			BREAK
+		}	
+	}
+
+	# Get ProjectURI
+	foreach ($line in $scriptFile)
+	{
+		if ($line -like ".PROJECTURI*")
+		{
+			$scriptInfo.ProjectURI = $line.Split(" ")[1]
+			BREAK
+		}		
+	}
+	Remove-Variable scriptFile
     Return $scriptInfo
 }
 #...................................
@@ -306,13 +329,13 @@ Stop-TxnLogging
 
 #Get Script Information
 [double]$myPsVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
-if ($myPsVersion -lt 5.1)
+if ($myPsVersion -lt 5)
 {
 	$scriptInfo = Get-ScriptInfo -Path $MyInvocation.MyCommand.Definition
 }
 else
 {
-	$scriptInfo = Test-ScriptFileInfo -Path $MyInvocation.MyCommand.Definition	
+	$scriptInfo = Test-ScriptFileInfo -Path $MyInvocation.MyCommand.Definition
 }
 
 #Get TimeZone Information
@@ -437,17 +460,6 @@ foreach ($computer in $computerName)
 	$svcStatus = Get-Service -ComputerName $computer -Name SMTPSVC -ErrorAction SilentlyContinue -ErrorVariable svcErr
 	$prop.Computer = $computer
 
-<#
-	#all status start off as PASSED
-	$prop.ServerStatus = "Passed"
-	$prop.QueueStatus = "Passed"
-	$prop.PickupStatus = "Passed"
-	$prop.BadMailStatus = "Passed"
-	$prop.DropStatus = "Passed"
-	$prop.ServiceStatus = "Passed"
-	$prop.CheckItems = @()
-#>	
-
 	#computer Status
 	$prop.QueueDirectory = "\\$($computer)\c$\inetpub\mailroot\queue"
 	$prop.PickupDirectory = "\\$($computer)\c$\inetpub\mailroot\pickup"
@@ -458,7 +470,6 @@ foreach ($computer in $computerName)
 	$pickup = Get-ChildItem $prop.PickupDirectory -ErrorAction SilentlyContinue -ErrorVariable pickupVar | Measure-Object -property length -sum
 	$badmail = Get-ChildItem $prop.BadMailDirectory -ErrorAction SilentlyContinue -ErrorVariable badmailVar | Measure-Object -property length -sum
 	$drop = Get-ChildItem $prop.DropDirectory -ErrorAction SilentlyContinue -ErrorVariable dropVar | Measure-Object -property length -sum
-
 
 	#error checks
 	if ($queueVar)
@@ -706,7 +717,7 @@ $htmlBody += '<br /><b>[REPORT]</b><br />'
 $htmlBody += "Generated from Server: $($env:COMPUTERNAME)<br />"
 $htmlBody += 'Script Path: ' + $MyInvocation.MyCommand.Definition
 $htmlBody += '<p>'
-$htmlBody += '<a href="'+ $scriptInfo.ProjectURI +'">IIS Smtp State '+ $scriptInfo.Version +'</a>'
+$htmlBody += '<a href="'+ ($scriptInfo.ProjectURI) +'">IIS Smtp State '+ ($scriptInfo.Version) +'</a>'
 
 $htmlBody += '</body></html>'
 $htmlBody | Out-File $outputHTMLFile
