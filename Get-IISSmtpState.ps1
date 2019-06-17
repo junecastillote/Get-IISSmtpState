@@ -751,10 +751,10 @@ if ($notifyTeams)
 
 		if ($failedServers)
 		{
-			$factSet = @()
+			$summaryFactSet = @()
 			foreach ($f in $failedServers)
 			{
-				$factSet += @{
+				$summaryFactSet += @{
 					name = "Computer"
 					value = "<font color=""red""><b>$($f.Computer)</b></font>"
 				}
@@ -762,9 +762,9 @@ if ($notifyTeams)
 				$i=1
 				foreach ($c in $f.CheckItems)
 				{
-					$factSet += @{
+					$summaryFactSet += @{
 						name = "Issue $($i):"
-						value = $c.ToString()
+						value = "[$($f.Computer)]: $($c.ToString())"
 					}
 					$i=$i+1
 				}
@@ -772,12 +772,44 @@ if ($notifyTeams)
 		}
 		else 
 		{
-			$factSet = @()
-			$factSet += @{
+			$summaryFactSet = @()
+			$summaryFactSet += @{
 				name = "Summary Status:"
 				value = "<font color=""GREEN""><b>NO ISSUES</b></font>"
 			}
 		}
+
+		#construct details
+		$detailFactSet = @()
+		foreach ($s in $serverCollection)
+		{
+			$detailFactSet += @{
+				name = "Computer:"
+				value = '<font color="'+ (Invoke-Command {if ($s.ServerStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b><u>'+($s.Computer)+'</u></b></font>'
+			}
+			$detailFactSet += @{
+				name = "Service:"
+				value = '<font color="'+ (Invoke-Command {if ($s.ServiceStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b>'+($s.ServiceStatus)+'</b></font>'
+			}
+			$detailFactSet += @{
+				name = "Queue:"
+				value = '<font color="'+ (Invoke-Command {if ($s.QueueStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b>'+($s.QueueCount.ToString('N0'))+' / '+($s.QueueSize.ToString('N0'))+' KB</b></font>'
+			}
+			$detailFactSet += @{
+				name = "Pickup:"
+				value = '<font color="'+ (Invoke-Command {if ($s.PickupStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b>'+($s.PickupCount.ToString('N0'))+' / '+($s.PickupSize.ToString('N0'))+' KB</b></font>'
+			}
+			$detailFactSet += @{
+				name = "BadMail:"
+				value = '<font color="'+ (Invoke-Command {if ($s.BadMailStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b>'+($s.BadMailCount.ToString('N0'))+' / '+($s.BadMailSize.ToString('N0'))+' KB</b></font>'
+			}
+			$detailFactSet += @{
+				name = "Drop:"
+				value = '<font color="'+ (Invoke-Command {if ($s.DropStatus -eq 'Passed'){return "green"}else{return "red"}})+'"><b>'+($s.DropCount.ToString('N0'))+' / '+($s.DropSize.ToString('N0'))+' KB</b></font>'
+			}			
+		}
+		
+
 
         $teamsMessage = ConvertTo-Json -Depth 4 @{
             title = $mailSubject
@@ -786,15 +818,21 @@ if ($notifyTeams)
             sections = @(
                 @{
                     activityTitle = "SMTP Virtual Server Health Check"
-                    activityImage = "https://raw.githubusercontent.com/junecastillote/Delete-FilesByAge/master/res/deleteFBAIcon.png"
+                    activityImage = "https://raw.githubusercontent.com/junecastillote/Get-IISSmtpState/2.0/res/smtpIcon.png"
                     activityText = ""
                 },
                 @{
                     title = "<h4>Summary</h4>"
                     facts = @(
-                        $factSet
+                        $summaryFactSet
                     )
-                },                
+				}, 
+				@{
+                    title = "<h4>Server Details</h4>"
+                    facts = @(
+                        $detailFactSet
+                    )
+                },               
                 @{
                     title = "<h4>Settings</h4>"
                     facts = @(
