@@ -857,9 +857,7 @@ if ($notifyTeams)
             )
 		}
 		
-		$teamsMessage | Out-File x.json
-
-        Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
+		Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
         
         foreach ($uri in $notifyTeams)
         {
