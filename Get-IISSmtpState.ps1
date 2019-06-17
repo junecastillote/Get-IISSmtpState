@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 2.2.2
+.VERSION 2.2.3
 
 .GUID 35b14c0b-4e9a-4111-9d9a-cfe6cf038219
 
@@ -34,6 +34,9 @@
 	- More code cleanup
 2.2.2 (June 13, 2019)
 	- fixed Get-ScriptInfo function
+2.2.3 (June 17, 2019)
+	- Added MS Teams Notification
+	- Code cleanup
 
 
 .PRIVATEDATA
@@ -129,7 +132,12 @@ param (
 	#switch to indicate if SSL will be used for SMTP relay
 	[Parameter()]
 	[switch]
-    $useSSL
+	$useSSL,
+	
+	#accepts Teams WebHook URI
+	[Parameter()]
+	[string[]]
+	$notifyTeams
 )
 
 #...................................
@@ -592,17 +600,17 @@ $serverCollection
 #...................................
 
 #...................................
-#Region WRITE REPORT
+#Region HTML REPORT
 #...................................
 $failedServers = $serverCollection | Where-Object {$_.ServerStatus -ne 'Passed'}
-$mailSubject = "IIS Virtual SMTP Service Report | $($today)"
+$mailSubject = "IIS Virtual SMTP Service Report"
 if ($orgName)
 {
-	$mailSubject = "[$($orgName)] | IIS Virtual SMTP Service Report | $($today)"	
+	$mailSubject = "[$($orgName)] | IIS Virtual SMTP Service Report"	
 }
 else 
 {
-	$mailSubject = "IIS Virtual SMTP Service Report | $($today)"
+	$mailSubject = "IIS Virtual SMTP Service Report"
 }
 
 if ($failedServers)
@@ -644,7 +652,6 @@ else
 }
 $htmlBody += '</table><hr />'
 
-
 $htmlBody += '<table id="SectionLabels">'
 $htmlBody += '<tr><th class="data">Server Details</th></tr></table>'
 $htmlBody += '<table id="data">'
@@ -653,51 +660,11 @@ foreach ($s in $serverCollection)
 {	
 	
 	$htmlBody += '<tr><td>'+$s.Computer+'</td>'
-
-	if ($s.ServiceStatus -eq 'Passed')
-	{
-		$htmlBody += '<td class="good">'+ $s.ServiceStatus + '</td>'
-	}
-	else 
-	{
-		$htmlBody += '<td class="bad">'+ $s.ServiceStatus + '</td>'
-	}
-
-	if ($s.QueueStatus -eq 'Passed')
-	{
-		$htmlBody += '<td class="good">'+($s.QueueCount.ToString('N0'))+' / '+($s.QueueSize.ToString('N0'))+' KB</td>'
-	}
-	else 
-	{
-		$htmlBody += '<td class="bad">'+($s.QueueCount.ToString('N0'))+' / '+($s.QueueSize.ToString('N0'))+' KB</td>'
-	}
-
-	if ($s.PickupStatus -eq 'Passed')
-	{
-		$htmlBody += '<td class="good">'+($s.PickupCount.ToString('N0'))+' / '+($s.PickupSize.ToString('N0'))+' KB</td>'
-	}
-	else 
-	{
-		$htmlBody += '<td class="bad">'+($s.PickupCount.ToString('N0'))+' / '+($s.PickupSize.ToString('N0'))+' KB</td>'
-	}
-
-	if ($s.BadMailStatus -eq 'Passed')
-	{
-		$htmlBody += '<td class="good">'+($s.BadMailCount.ToString('N0'))+' / '+($s.BadMailSize.ToString('N0'))+' KB</td>'
-	}
-	else 
-	{
-		$htmlBody += '<td class="bad">'+($s.BadMailCount.ToString('N0'))+' / '+($s.BadMailSize.ToString('N0'))+' KB</td>'
-	}
-
-	if ($s.DropStatus -eq 'Passed')
-	{
-		$htmlBody += '<td class="good">'+($s.DropCount.ToString('N0'))+' / '+($s.DropSize.ToString('N0'))+' KB</td>'
-	}
-	else 
-	{
-		$htmlBody += '<td class="bad">'+($s.DropCount.ToString('N0'))+' / '+($s.DropSize.ToString('N0'))+' KB</td>'
-	}	
+	$htmlBody += '<td class="'+ (invoke-Command {if ($s.ServiceStatus -eq 'Passed'){return "good"}else{return "bad"}}) +'">'+ $s.ServiceStatus + '</td>'
+	$htmlBody += '<td class="'+ (invoke-Command {if ($s.QueueStatus -eq 'Passed'){return "good"}else{return "bad"}}) +'">'+($s.QueueCount.ToString('N0'))+' / '+($s.QueueSize.ToString('N0'))+' KB</td>'
+	$htmlBody += '<td class="'+ (invoke-Command {if ($s.PickupStatus -eq 'Passed'){return "good"}else{return "bad"}}) +'">'+($s.PickupCount.ToString('N0'))+' / '+($s.PickupSize.ToString('N0'))+' KB</td>'
+	$htmlBody += '<td class="'+ (invoke-Command {if ($s.BadMailStatus -eq 'Passed'){return "good"}else{return "bad"}}) +'">'+($s.BadMailCount.ToString('N0'))+' / '+($s.BadMailSize.ToString('N0'))+' KB</td>'
+	$htmlBody += '<td class="'+ (invoke-Command {if ($s.DropStatus -eq 'Passed'){return "good"}else{return "bad"}}) +'">'+($s.DropCount.ToString('N0'))+' / '+($s.DropSize.ToString('N0'))+' KB</td>'
 }
 $htmlBody += '</table><hr />'
 
@@ -723,7 +690,7 @@ $htmlBody += '</body></html>'
 $htmlBody | Out-File $outputHTMLFile
 Write-host (Get-Date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Report saved in $($outputHTMLFile)" -ForegroundColor Yellow
 #...................................
-#EndRegion WRITE REPORT
+#EndRegion HTML REPORT
 #...................................
 
 #...................................
@@ -740,19 +707,11 @@ if ($sendEmail)
         useSSL = $useSSL
         body = $mailBody
 		bodyashtml = $true
-		subject = $mailSubject
+		subject = ($mailSubject +  " | $($today)")
 	}
 	
-	if ($failedServers)
-	{
-		$mailParams += @{priority = "HIGH"}
-	}
-	else 
-	{
-		$mailParams += @{priority = "LOW"}
-	}
-
-    
+	$mailParams += @{priority = (Invoke-Command {if ($failedServers) {return "HIGH"} else {return "LOW"}})}
+	    
     if ($smtpAuthRequired)
     {
         $mailParams += @{credential = $smtpCredential}
@@ -774,5 +733,107 @@ if ($sendEmail)
 }
 #...................................
 #EndRegion SEND REPORT
+#...................................
+
+#...................................
+#Region NOTIFY MS TEAMS
+#...................................
+if ($notifyTeams)
+    {
+		#Construct Issue Summary
+		if ($failedServers)
+		{
+			$facts = @()
+			$failedServers | ForEach-Object {
+				$facts += @{name = $_.Computer;value= ($_.CheckItems -join "<")}
+			}
+		}
+
+		if ($failedServers)
+		{
+			$factSet = @()
+			foreach ($f in $failedServers)
+			{
+				$factSet += @{
+					name = "Computer"
+					value = "<font color=""red""><b>$($f.Computer)</b></font>"
+				}
+
+				$i=1
+				foreach ($c in $f.CheckItems)
+				{
+					$factSet += @{
+						name = "Issue $($i):"
+						value = $c.ToString()
+					}
+					$i=$i+1
+				}
+			}			
+		}
+		else 
+		{
+			$factSet = @()
+			$factSet += @{
+				name = "Summary Status:"
+				value = "<font color=""GREEN""><b>NO ISSUES</b></font>"
+			}
+		}
+
+        $teamsMessage = ConvertTo-Json -Depth 4 @{
+            title = $mailSubject
+            text = $today
+    
+            sections = @(
+                @{
+                    activityTitle = "SMTP Virtual Server Health Check"
+                    activityImage = "https://raw.githubusercontent.com/junecastillote/Delete-FilesByAge/master/res/deleteFBAIcon.png"
+                    activityText = ""
+                },
+                @{
+                    title = "<h4>Summary</h4>"
+                    facts = @(
+                        $factSet
+                    )
+                },                
+                @{
+                    title = "<h4>Settings</h4>"
+                    facts = @(
+                        @{
+                            name = "Source:"
+                            value = $env:COMPUTERNAME
+                        },
+                        @{
+                            name = "Script File:"
+                            value = $MyInvocation.MyCommand.Definition
+                        },
+                        @{
+                            name = "Html Report File:"
+                            value = $outputHTMLFile
+                        },
+                        @{
+                            name = "Script Version:"
+                            value = "<a href=""$($scriptInfo.ProjectURI)"">$($MyInvocation.MyCommand.Definition.ToString().Split("\")[-1].Split(".")[0]) $($scriptInfo.version)</a>"
+                        }
+                    )
+                }
+            )
+		}
+		
+		$teamsMessage | Out-File x.json
+
+        Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
+        
+        foreach ($uri in $notifyTeams)
+        {
+            try {
+                Invoke-RestMethod -uri $uri -Method Post -body $teamsMessage -ContentType 'application/json' -ErrorAction Stop
+            }
+            catch {
+                Write-Host "FAILED: $($_.exception.message)" -ForegroundColor RED
+            }
+        }
+    }   
+#...................................
+#EndRegion NOTIFY MS TEAMS
 #...................................
 Stop-TxnLogging
