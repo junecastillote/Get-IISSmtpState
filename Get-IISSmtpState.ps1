@@ -737,7 +737,11 @@ if ($sendEmail)
     {
         Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending email to" ($To -join ", ") -ForegroundColor Yellow
         Send-MailMessage @mailParams
-    }
+	}
+	elseif ($sendEmail -eq 'ErrorOnly' -and !$failedServers)
+	{
+		Write-Host "INFO: ErrorOnly is specified but no issues were detected. Abort notification." -ForegroundColor Yellow
+	}
 }
 #...................................
 #EndRegion SEND REPORT
@@ -817,8 +821,6 @@ if ($notifyTeams)
 			}			
 		}
 		
-
-
         $teamsMessage = ConvertTo-Json -Depth 4 @{
             title = $mailSubject
             text = $today
@@ -865,20 +867,6 @@ if ($notifyTeams)
             )
 		}
 		
-		
-		<#
-		
-        foreach ($uri in $notifyTeams)
-        {
-            try {
-                Invoke-RestMethod -uri $uri -Method Post -body $teamsMessage -ContentType 'application/json' -ErrorAction Stop
-            }
-            catch {
-                Write-Host "FAILED: $($_.exception.message)" -ForegroundColor RED
-            }
-		}
-		#>
-		
 		#notify on issues only, and issue(s) detected.
 		if ($notifyTeamsOnAlertsOnly -and $failedServers)
 		{
@@ -896,7 +884,7 @@ if ($notifyTeams)
 		#notify on issues only, and NO issue(s) detected. DO NOTHING.
 		elseif ($notifyTeamsOnAlertsOnly -and !$failedServers)
 		{
-			Write-Host "INFO: notifyTeamsOnAlertsOnly is specified but no issues were detected. Abort notifcation." -ForegroundColor Yellow
+			Write-Host "INFO: notifyTeamsOnAlertsOnly is specified but no issues were detected. Abort notification." -ForegroundColor Yellow
 			BREAK
 		}
 		#notify everytime.
