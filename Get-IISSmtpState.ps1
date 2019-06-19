@@ -37,7 +37,8 @@
 2.2.3 (June 17, 2019)
 	- Added MS Teams Notification
 	- Code cleanup
-
+2.2.4 (June 19, 2019)
+	- Added parameter notifyTeamsOnAlertsOnly
 
 .PRIVATEDATA
 
@@ -134,10 +135,17 @@ param (
 	[switch]
 	$useSSL,
 	
-	#accepts Teams WebHook URI
+	#accepts Teams WebHook URI. Accepts multiple URI.
 	[Parameter()]
 	[string[]]
-	$notifyTeams
+	$notifyTeams,
+
+	#switch to indicate whether the script will notify via Teams only if one or more issues were detected.
+	[Parameter()]
+	[switch]
+	$notifyTeamsOnAlertsOnly
+
+
 )
 
 #...................................
@@ -857,8 +865,9 @@ if ($notifyTeams)
             )
 		}
 		
-		Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
-        
+		
+		<#
+		
         foreach ($uri in $notifyTeams)
         {
             try {
@@ -867,7 +876,43 @@ if ($notifyTeams)
             catch {
                 Write-Host "FAILED: $($_.exception.message)" -ForegroundColor RED
             }
-        }
+		}
+		#>
+		
+		#notify on issues only, and issue(s) detected.
+		if ($notifyTeamsOnAlertsOnly -and $failedServers)
+		{
+			Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
+			foreach ($uri in $notifyTeams)
+			{
+				try {
+					Invoke-RestMethod -uri $uri -Method Post -body $teamsMessage -ContentType 'application/json' -ErrorAction Stop
+				}
+				catch {
+					Write-Host "FAILED: $($_.exception.message)" -ForegroundColor RED
+				}
+			}			
+		}
+		#notify on issues only, and NO issue(s) detected. DO NOTHING.
+		elseif ($notifyTeamsOnAlertsOnly -and !$failedServers)
+		{
+			Write-Host "INFO: notifyTeamsOnAlertsOnly is specified but no issues were detected. Abort notifcation." -ForegroundColor Yellow
+			BREAK
+		}
+		#notify everytime.
+		else 
+		{
+			Write-Host (get-date -Format "dd-MMM-yyyy hh:mm:ss tt") ": Sending Teams Notification" -ForegroundColor Green
+			foreach ($uri in $notifyTeams)
+			{
+				try {
+					Invoke-RestMethod -uri $uri -Method Post -body $teamsMessage -ContentType 'application/json' -ErrorAction Stop
+				}
+				catch {
+					Write-Host "FAILED: $($_.exception.message)" -ForegroundColor RED
+				}
+			}	
+		}
     }   
 #...................................
 #EndRegion NOTIFY MS TEAMS
