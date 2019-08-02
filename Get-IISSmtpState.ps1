@@ -336,7 +336,7 @@ Function Get-ScriptInfo
     Return $scriptInfo
 }
 #...................................
-#EndRegion
+#EndRegion Functions
 #...................................
 
 
